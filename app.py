@@ -3,303 +3,416 @@ import google.generativeai as genai
 import PyPDF2
 import json
 import time
+import pandas as pd
 
 # Konfigurasi Halaman & Tema
-st.set_page_config(page_title="AI Study Assistant - SNBT/TKA/UKK/US", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="AI Study Assistant - SNBT/TKA/UKK", layout="wide", initial_sidebar_state="collapsed")
 
-# Inject Custom CSS
-st.markdown("""
+# Inject Custom CSS Ala Kita (Modern, Dark Mode, Minimalist)
+st.markdown('''
 <style>
-    .main { background-color: #0e1117; }
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: 600; }
-    .question-card { background-color: #1e222d; padding: 20px; border-radius: 12px; border: 1px solid #2e3545; margin-bottom: 20px; }
+    :root {
+        --primary-bg: #0b0f19;
+        --card-bg: #151a28;
+        --accent-blue: #3b82f6;
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border-color: #2e3c54;
+    }
+    
+    .stApp {
+        background-color: var(--primary-bg);
+        color: var(--text-main);
+    }
+    
+    /* Card Styling */
+    .dashboard-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Typography */
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #ffffff;
+    }
+    .card-subtitle {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        margin-bottom: 20px;
+    }
+    
+    /* Metrics/Scores */
+    .score-circle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 8px solid var(--accent-blue);
+        font-size: 2rem;
+        font-weight: bold;
+        color: white;
+        margin: 0 auto;
+    }
+    
+    /* Flashcard */
+    .flashcard {
+        background: linear-gradient(145deg, #1e293b, #0f172a);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        min-height: 150px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+    }
+    .flashcard-title {
+        color: var(--accent-blue);
+        font-size: 0.85rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+    }
+    .flashcard-content {
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    
+    /* Custom button overrides */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
 </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 # System Kode Akses Security
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔒 Akses Terbatas Aplikasi Belajar")
-    st.write("Masukkan kode akses rahasia untuk melanjutkan:")
-    
-    col_acc1, col_acc2 = st.columns([2, 1])
-    with col_acc1:
-        passcode = st.text_input("Kode Akses", type="password", placeholder="Masukkan 6 digit angka")
-    
-    if st.button("Masuk ke Aplikasi"):
+    st.markdown('<div class="dashboard-card" style="max-width: 500px; margin: 100px auto; text-align: center;">', unsafe_allow_html=True)
+    st.title("🔒 Portal Ujian Terpadu")
+    st.write("Masukkan kode akses rahasia untuk masuk.")
+    passcode = st.text_input("Kode Akses", type="password", placeholder="******", label_visibility="collapsed")
+    if st.button("Akses Sistem", type="primary", use_container_width=True):
         if passcode == "060407":
             st.session_state.authenticated = True
-            st.success("Kode akses benar! Membuka aplikasi...")
             st.rerun()
         else:
-            st.error("Kode akses salah. Kamu tidak memiliki izin akses!")
+            st.error("Akses Ditolak!")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# Inisialisasi Session State Baru
-if "quiz_data" not in st.session_state:
-    st.session_state.quiz_data = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "pdf_dict" not in st.session_state:
-    st.session_state.pdf_dict = {}  # Menyimpan banyak file sekaligus
-if "active_file" not in st.session_state:
-    st.session_state.active_file = None  # File yang sedang dipilih
-if "start_time" not in st.session_state:
-    st.session_state.start_time = None
-if "user_answers" not in st.session_state:
-    st.session_state.user_answers = {}
-if "submitted" not in st.session_state:
-    st.session_state.submitted = False
+# Inisialisasi Session State
+if "history" not in st.session_state:
+    st.session_state.history = [] # Format: {"mapel": "RPL", "score": 85, "date": "..."}
+if "flashcards" not in st.session_state:
+    st.session_state.flashcards = []
 
-st.title("📚 AI Study Assistant & Tryout Simulator")
-st.markdown("Persiapan Ujian: **TKA, UKK, US, & SNBT**")
+# Navigasi ala Dashboard
+st.markdown("<h2>🎓 MYSARPRASS Learning Terminal</h2>", unsafe_allow_html=True)
 
-# Cek API Key dari Streamlit Secrets atau Sidebar
+menu = st.sidebar.radio("Navigasi", ["🏠 Dashboard Utama", "📝 Mulai Simulasi", "📚 Generator Materi", "⚙️ Pengaturan API"])
+
+# Cek API Key
 api_key = ""
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
+else:
+    api_key = st.session_state.get("manual_api_key", "")
 
-# Sidebar untuk Pengaturan
-with st.sidebar:
-    st.header("⚙️ Pengaturan")
-    
-    if api_key:
-        st.success("✅ API Key Otomatis Terhubung!")
-        genai.configure(api_key=api_key)
+if api_key:
+    genai.configure(api_key=api_key)
+
+# ----------------- HALAMAN PENGATURAN -----------------
+if menu == "⚙️ Pengaturan API":
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Koneksi Sistem AI</div>', unsafe_allow_html=True)
+    if "GEMINI_API_KEY" in st.secrets:
+        st.success("Sistem telah terhubung otomatis ke Gemini AI melalui sistem rahasia.")
     else:
-        api_key_input = st.text_input("Masukkan Google Gemini API Key", type="password")
-        if api_key_input:
-            api_key = api_key_input
-            genai.configure(api_key=api_key)
-        
-    st.header("📄 Upload Materi PDF")
-    st.info("Kamu bisa upload banyak file beda mapel sekaligus.")
-    uploaded_files = st.file_uploader("Upload file PDF materi", type="pdf", accept_multiple_files=True)
+        new_key = st.text_input("Masukkan Gemini API Key:", type="password", value=st.session_state.get("manual_api_key", ""))
+        if st.button("Simpan Kunci API"):
+            st.session_state.manual_api_key = new_key
+            st.success("API Key disimpan sementara di sesi ini.")
     
-    if uploaded_files:
-        if st.button("Ekstrak Semua PDF"):
-            with st.spinner(f"Membaca {len(uploaded_files)} file..."):
-                temp_dict = {}
-                for file in uploaded_files:
-                    pdf_reader = PyPDF2.PdfReader(file)
-                    text = ""
-                    for page in pdf_reader.pages:
-                        text += page.extract_text() + "\n"
-                    temp_dict[file.name] = text
-                
-                st.session_state.pdf_dict = temp_dict
-                
-                # Otomatis pilih file pertama yang diupload sebagai aktif
-                if len(temp_dict) > 0:
-                    st.session_state.active_file = list(temp_dict.keys())[0]
-                st.success("Semua file berhasil diekstrak!")
-
-    # Fitur Memilih Mapel yang Fokus Dipelajari
-    if st.session_state.pdf_dict:
-        st.markdown("---")
-        st.header("🎯 Pilih Mata Pelajaran")
-        
-        selected_file = st.selectbox(
-            "Materi yang sedang aktif:", 
-            list(st.session_state.pdf_dict.keys()), 
-            index=list(st.session_state.pdf_dict.keys()).index(st.session_state.active_file) if st.session_state.active_file in st.session_state.pdf_dict else 0
-        )
-        
-        # Jika ganti mapel, reset soal dan chat agar tidak tertukar
-        if selected_file != st.session_state.active_file:
-            st.session_state.active_file = selected_file
-            st.session_state.quiz_data = None
-            st.session_state.submitted = False
-            st.session_state.user_answers = {}
-            st.session_state.chat_history = []
-            st.rerun()
-
-    st.markdown("---")
     if st.button("🔒 Keluar / Lock App"):
         st.session_state.authenticated = False
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Ambil teks khusus dari file yang sedang dipilih
-current_text = ""
-if st.session_state.active_file and st.session_state.active_file in st.session_state.pdf_dict:
-    current_text = st.session_state.pdf_dict[st.session_state.active_file]
-
-# Main Area (Tabs)
-tab1, tab2, tab3, tab4 = st.tabs(["📖 Penjelasan PDF", "🎥 Rangkum YouTube", "📝 Simulasi Ujian", "💬 Chatbot AI"])
-
-# Tab 1: Penjelasan Materi
-with tab1:
-    st.header(f"Ringkasan Materi: {st.session_state.active_file if st.session_state.active_file else 'Belum ada file'}")
-    if current_text and api_key:
-        if st.button("Buat Ringkasan Materi Ini"):
-            with st.spinner("AI sedang merangkum materi..."):
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt = f"Buatkan penjelasan dan ringkasan komprehensif khusus untuk materi dari file {st.session_state.active_file} berikut:\n\n{current_text[:15000]}"
-                response = model.generate_content(prompt)
-                st.write(response.text)
-    elif not api_key:
-        st.warning("Silakan pastikan API Key sudah dimasukkan/tersimpan.")
-    else:
-        st.info("Silakan upload, ekstrak PDF, dan pilih file di sidebar terlebih dahulu.")
-
-# Tab 2: Rangkum YouTube
-with tab2:
-    st.header("🎥 Rangkum Video Pembelajaran YouTube")
-    st.write("Tempelkan link video YouTube materi pelajaran untuk dirangkum poin pentingnya.")
+# ----------------- HALAMAN DASHBOARD -----------------
+elif menu == "🏠 Dashboard Utama":
     
-    youtube_url = st.text_input("Link Video YouTube", placeholder="https://www.youtube.com/watch?v=...")
+    # Bagian Atas: Radar Kesiapan & Riwayat Ringkas
+    col1, col2 = st.columns([1, 2])
     
-    if youtube_url and api_key:
-        if st.button("Proses & Rangkum Video"):
-            with st.spinner("AI sedang menganalisis konten video YouTube..."):
+    with col1:
+        st.markdown('<div class="dashboard-card" style="text-align: center; height: 100%;">', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">Radar Kesiapanmu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-subtitle">Rata-rata skor dari seluruh simulasi</div>', unsafe_allow_html=True)
+        
+        if len(st.session_state.history) > 0:
+            avg_score = sum([x['score'] for x in st.session_state.history]) / len(st.session_state.history)
+            st.markdown(f'<div class="score-circle">{int(avg_score)}</div>', unsafe_allow_html=True)
+            st.progress(int(avg_score)/100)
+            st.caption("Menuju Target Aman (SNBT/UKK)")
+        else:
+            st.markdown(f'<div class="score-circle">0</div>', unsafe_allow_html=True)
+            st.caption("Belum ada data. Mulai simulasi untuk menghitung!")
+            
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown('<div class="dashboard-card" style="height: 100%;">', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">Aktivitas Terbaru</div>', unsafe_allow_html=True)
+        
+        if not st.session_state.history:
+            st.info("Kamu belum menyelesaikan latihan apapun hari ini.")
+        else:
+            for item in reversed(st.session_state.history[-4:]): # Ambil 4 terakhir
+                color = "green" if item['score'] >= 70 else "red"
+                st.markdown(f'''
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding: 12px 0;">
+                    <div>
+                        <strong>{item['mapel']}</strong><br>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">{item['date']}</span>
+                    </div>
+                    <div style="font-weight: bold; font-size: 1.2rem; color: {color};">
+                        {item['score']} / 100
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    # Bagian Bawah: Flashcard Cepat
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Flashcard Belajarmu</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subtitle">Ketik topik materi (Contoh: "Jaringan Komputer", "Matriks", "Fotosintesis") lalu AI akan membuatkan intisarinya.</div>', unsafe_allow_html=True)
+    
+    fc_col1, fc_col2 = st.columns([3, 1])
+    with fc_col1:
+        topic = st.text_input("Materi / Topik", placeholder="Ketik topik di sini...", label_visibility="collapsed")
+    with fc_col2:
+        if st.button("Buat Flashcard", type="primary", use_container_width=True) and topic and api_key:
+            with st.spinner("Meracik inti materi..."):
                 try:
                     model = genai.GenerativeModel('gemini-1.5-flash')
-                    prompt = f"Tolong buatkan ringkasan materi pelajaran, poin kunci, serta rumus/contoh soal penting dari video YouTube ini: {youtube_url}"
-                    response = model.generate_content(prompt)
-                    st.markdown(response.text)
-                except Exception as e:
-                    st.error(f"Gagal merangkum video. Pastikan link YouTube valid. Detail: {e}")
-    elif not api_key:
-        st.warning("Silakan pastikan API Key sudah dimasukkan/tersimpan.")
-
-# Tab 3: Simulasi Ujian
-with tab3:
-    st.header(f"Simulasi Ujian: {st.session_state.active_file if st.session_state.active_file else 'Belum ada file'}")
+                    prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
+                    res = model.generate_content(prompt)
+                    json_str = res.text.replace("```json", "").replace("```", "").strip()
+                    cards = json.loads(json_str)
+                    st.session_state.flashcards = cards
+                except:
+                    st.error("Gagal membuat flashcard. Coba lagi.")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        jumlah_soal = st.selectbox("Jumlah Soal", [5, 10, 20, 30, 45])
-    with col2:
-        waktu_menit = st.selectbox("Waktu Pengerjaan (Menit)", [10, 30, 60, 90, 120])
-        
-    if current_text and api_key:
-        if st.button(f"Buat Soal {st.session_state.active_file}"):
-            with st.spinner(f"AI sedang menyusun soal dari {st.session_state.active_file}..."):
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                prompt = f"""
-                Berdasarkan teks materi dari file {st.session_state.active_file} berikut, buatkan {jumlah_soal} soal ujian.
-                Variasikan tipe soal menjadi:
-                1. Pilihan Ganda (A, B, C, D, E)
-                2. Benar/Salah
-                3. Pilihan Ganda Kompleks (Jawaban benar lebih dari 1)
+    if st.session_state.flashcards:
+        cols = st.columns(len(st.session_state.flashcards))
+        for idx, card in enumerate(st.session_state.flashcards):
+            with cols[idx]:
+                st.markdown(f'''
+                <div class="flashcard">
+                    <div class="flashcard-title">{card.get('subtopik', 'Fakta')}</div>
+                    <div class="flashcard-content">{card.get('isi', '-')}</div>
+                </div>
+                ''', unsafe_allow_html=True)
                 
-                Kembalikan dalam format JSON murni tanpa markdown (tanpa ```json) dengan struktur seperti ini:
-                [
-                    {{
-                        "tipe": "pilihan_ganda",
-                        "pertanyaan": "...",
-                        "opsi": ["A...", "B...", "C...", "D...", "E..."],
-                        "jawaban_benar": ["A..."],
-                        "penjelasan": "..."
-                    }}
-                ]
-                
-                Teks: {current_text[:15000]}
-                """
-                try:
-                    response = model.generate_content(prompt)
-                    json_str = response.text.replace("```json", "").replace("```", "").strip()
-                    st.session_state.quiz_data = json.loads(json_str)
-                    st.session_state.start_time = time.time()
-                    st.session_state.submitted = False
-                    st.session_state.user_answers = {}
-                    st.success("Soal berhasil dibuat! Silakan kerjakan di bawah.")
-                except Exception as e:
-                    st.error("Gagal membuat soal. Format dari AI tidak sesuai, silakan klik tombol buat soal sekali lagi.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    if st.session_state.quiz_data:
-        st.write(f"⏱️ **Batas Waktu:** {waktu_menit} Menit")
-        st.markdown("---")
-        
-        for i, q in enumerate(st.session_state.quiz_data):
-            st.markdown(f"**{i+1}. {q['pertanyaan']}** *(Tipe: {q['tipe'].replace('_', ' ').title()})*")
-            
-            if q['tipe'] == "lebih_dari_satu":
-                selected_opts = []
-                for opt in q['opsi']:
-                    checked = st.checkbox(opt, key=f"q_{i}_{opt}", disabled=st.session_state.submitted)
-                    if checked:
-                        selected_opts.append(opt)
-                st.session_state.user_answers[i] = selected_opts
-            else:
-                user_choice = st.radio("Pilih jawaban:", q['opsi'], key=f"q_{i}", index=None, disabled=st.session_state.submitted)
-                st.session_state.user_answers[i] = user_choice
-            
-            if st.session_state.submitted:
-                user_ans = st.session_state.user_answers.get(i)
-                correct_ans = q['jawaban_benar']
-                
-                if q['tipe'] == "lebih_dari_satu":
-                    is_correct = sorted(user_ans if user_ans else []) == sorted(correct_ans)
-                else:
-                    is_correct = [user_ans] == correct_ans if user_ans else False
-                
-                if is_correct:
-                    st.success(f"✅ **Jawaban Kamu Benar!**\n\n**Penjelasan:** {q['penjelasan']}")
-                else:
-                    jawaban_user_str = ", ".join(user_ans) if isinstance(user_ans, list) else (user_ans if user_ans else "Tidak dijawab")
-                    st.error(f"❌ **Jawaban Kamu Salah.** (Jawaban kamu: {jawaban_user_str})\n\n"
-                             f"💡 **Jawaban Benar:** {', '.join(correct_ans)}\n\n"
-                             f"📝 **Penjelasan:** {q['penjelasan']}")
-            
-            st.markdown("---")
-            
-        if not st.session_state.submitted:
-            if st.button("Kumpulkan Jawaban", type="primary"):
-                elapsed_time = (time.time() - st.session_state.start_time) / 60
-                if elapsed_time > waktu_menit:
-                    st.error("Waktu pengerjaan sudah habis!")
-                else:
-                    st.session_state.submitted = True
-                    st.rerun()
-        else:
-            score = 0
-            for i, q in enumerate(st.session_state.quiz_data):
-                user_ans = st.session_state.user_answers.get(i)
-                correct_ans = q['jawaban_benar']
-                if q['tipe'] == "lebih_dari_satu":
-                    if sorted(user_ans if user_ans else []) == sorted(correct_ans):
-                        score += 1
-                else:
-                    if [user_ans] == correct_ans:
-                        score += 1
-            
-            total_soal = len(st.session_state.quiz_data)
-            nilai_akhir = int((score / total_soal) * 100)
-            
-            st.balloons()
-            st.metric(label="Nilai Akhir Kamu", value=f"{nilai_akhir} / 100", delta=f"{score} dari {total_soal} Soal Benar")
-            
-            if st.button("Reset / Buat Simulasi Baru"):
-                st.session_state.submitted = False
-                st.session_state.quiz_data = None
-                st.rerun()
-
-# Tab 4: Chatbot AI
-with tab4:
-    st.header(f"Chatbot AI: {st.session_state.active_file if st.session_state.active_file else 'Belum ada file'}")
-    st.write("Tanyakan hal spesifik terkait materi yang sedang aktif dipilih.")
+# ----------------- HALAMAN SIMULASI -----------------
+elif menu == "📝 Mulai Simulasi":
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Konfigurasi Simulasi (Siap dalam 10 Detik)</div>', unsafe_allow_html=True)
     
-    for message in st.session_state.chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if prompt := st.chat_input("Tanyakan sesuatu tentang materi ini..."):
+    # Pilihan Preset atau Upload
+    sumber = st.radio("Sumber Soal:", ["📚 Jalur Standar (Bank Soal AI)", "📄 Upload Modul Sendiri (PDF)"], horizontal=True)
+    
+    materi_text = ""
+    mapel_name = ""
+    
+    if sumber == "📚 Jalur Standar (Bank Soal AI)":
+        mapel_name = st.selectbox("Pilih Jalur Target", [
+            "Penalaran Matematika", 
+            "Literasi Bahasa Indonesia", 
+            "Literasi Bahasa Inggris", 
+            "Konsentrasi Keahlian RPL (Rekayasa Perangkat Lunak)",
+            "Pengetahuan Kuantitatif"
+        ])
+        materi_text = f"Buatkan soal setingkat ujian nasional (SNBT/UKK) untuk mata pelajaran: {mapel_name}. Pastikan soal berbobot dan menantang."
+    else:
+        uploaded_file = st.file_uploader("Upload Modul PDF", type="pdf")
+        if uploaded_file:
+            mapel_name = uploaded_file.name
+            with st.spinner("Mengekstrak PDF..."):
+                pdf_reader = PyPDF2.PdfReader(uploaded_file)
+                for page in pdf_reader.pages:
+                    materi_text += page.extract_text() + "\n"
+                st.success("PDF siap digunakan!")
+    
+    # Pengaturan jumlah dan waktu
+    cfg_col1, cfg_col2 = st.columns(2)
+    with cfg_col1:
+        jumlah_soal = st.select_slider("Jumlah Soal", options=[5, 10, 15, 20, 30, 45], value=10)
+    with cfg_col2:
+        waktu_menit = st.select_slider("Durasi (Menit)", options=[10, 20, 30, 60, 90, 120], value=20)
+        
+    st.markdown("<hr style='border-color: var(--border-color);'>", unsafe_allow_html=True)
+    
+    if st.button("🚀 Mulai Simulasi Sekarang", type="primary", use_container_width=True):
         if not api_key:
-            st.error("Silakan pastikan API Key sudah dimasukkan/tersimpan.")
+            st.error("API Key belum diatur!")
+        elif not materi_text:
+            st.warning("Pilih materi atau upload PDF terlebih dahulu.")
         else:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            with st.spinner("Mengacak bank soal..."):
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    prompt = f'''
+                    Berdasarkan acuan berikut, buatkan {jumlah_soal} soal ujian berstandar HOTS (Higher Order Thinking Skills).
+                    Acuan/Materi: {materi_text[:10000]}
+                    
+                    Format JSON murni (tanpa markdown):
+                    [
+                        {{
+                            "pertanyaan": "...",
+                            "opsi": ["A. ...", "B. ...", "C. ...", "D. ...", "E. ..."],
+                            "jawaban_benar": "A. ...",
+                            "penjelasan": "..."
+                        }}
+                    ]
+                    '''
+                    res = model.generate_content(prompt)
+                    json_str = res.text.replace("```json", "").replace("```", "").strip()
+                    st.session_state.quiz_data_v2 = json.loads(json_str)
+                    st.session_state.quiz_mapel = mapel_name
+                    st.session_state.start_time_v2 = time.time()
+                    st.session_state.quiz_waktu = waktu_menit
+                    st.session_state.quiz_submitted = False
+                    st.session_state.quiz_answers = {}
+                    st.success("Siap! Gulir ke bawah untuk mengerjakan.")
+                except Exception as e:
+                    st.error(f"Gagal memuat soal. Server sibuk. Silakan coba lagi. Detail: {e}")
+                    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Area Pengerjaan Soal
+    if st.session_state.get("quiz_data_v2"):
+        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+        st.markdown(f"### 📝 Lembar Jawaban: {st.session_state.quiz_mapel}")
+        
+        waktu_sisa = st.session_state.quiz_waktu - ((time.time() - st.session_state.start_time_v2) / 60)
+        st.info(f"⏳ Target Waktu: {st.session_state.quiz_waktu} Menit (Kerjakan dengan teliti)")
+        
+        for i, q in enumerate(st.session_state.quiz_data_v2):
+            st.markdown(f"**{i+1}. {q['pertanyaan']}**")
+            
+            user_choice = st.radio("Opsi:", q['opsi'], key=f"qz_{i}", index=None, disabled=st.session_state.quiz_submitted)
+            st.session_state.quiz_answers[i] = user_choice
+            
+            if st.session_state.quiz_submitted:
+                if user_choice == q['jawaban_benar']:
+                    st.success("✅ Benar!")
+                    st.caption(f"**Pembahasan:** {q['penjelasan']}")
+                else:
+                    st.error(f"❌ Salah. Kunci: {q['jawaban_benar']}")
+                    st.caption(f"**Pembahasan:** {q['penjelasan']}")
+            
+            st.markdown("<hr style='border-color: var(--border-color); border-style: dashed;'>", unsafe_allow_html=True)
+            
+        if not st.session_state.quiz_submitted:
+            if st.button("Kumpulkan & Cek Nilai", type="primary"):
+                st.session_state.quiz_submitted = True
+                
+                # Hitung Nilai
+                score = 0
+                for i, q in enumerate(st.session_state.quiz_data_v2):
+                    if st.session_state.quiz_answers.get(i) == q['jawaban_benar']:
+                        score += 1
+                        
+                nilai_akhir = int((score / len(st.session_state.quiz_data_v2)) * 100)
+                
+                # Simpan Riwayat
+                import datetime
+                now = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
+                st.session_state.history.append({
+                    "mapel": st.session_state.quiz_mapel,
+                    "score": nilai_akhir,
+                    "date": now
+                })
+                
+                st.rerun()
+        else:
+            score = sum(1 for i, q in enumerate(st.session_state.quiz_data_v2) if st.session_state.quiz_answers.get(i) == q['jawaban_benar'])
+            nilai_akhir = int((score / len(st.session_state.quiz_data_v2)) * 100)
+            
+            st.markdown(f'<div class="score-circle" style="margin-bottom: 20px;">{nilai_akhir}</div>', unsafe_allow_html=True)
+            if nilai_akhir >= 70:
+                st.balloons()
+            
+            if st.button("Selesai & Kembali ke Dashboard"):
+                st.session_state.quiz_data_v2 = None
+                st.rerun()
+                
+        st.markdown('</div>', unsafe_allow_html=True)
 
-            with st.chat_message("assistant"):
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                context = f"Konteks materi PDF dari file {st.session_state.active_file}: {current_text[:10000]}\n\n" if current_text else ""
-                full_prompt = context + prompt
-                
-                response = model.generate_content(full_prompt)
-                st.markdown(response.text)
-                
-            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+# ----------------- HALAMAN GENERATOR MATERI -----------------
+elif menu == "📚 Generator Materi":
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">Generator Modul & Rangkuman AI</div>', unsafe_allow_html=True)
+    st.write("Ubah Video YouTube atau File PDF menjadi catatan belajar interaktif.")
+    
+    jenis = st.radio("Pilih Mode:", ["🎥 Rangkum Video YouTube", "📄 Rangkum File PDF"], horizontal=True)
+    
+    if jenis == "🎥 Rangkum Video YouTube":
+        yt_url = st.text_input("Link YouTube", placeholder="https://www.youtube.com/watch?v=...")
+        if st.button("Proses Video", type="primary"):
+            if not api_key: st.error("API Key belum diatur!")
+            elif yt_url:
+                with st.spinner("AI menganalisis video..."):
+                    try:
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        res = model.generate_content(f"Buatkan ringkasan struktur, materi penting, dan rumus/konsep dari video ini: {yt_url}")
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown(res.text)
+                    except:
+                        st.error("Gagal menganalisis video.")
+    else:
+        pdf_file = st.file_uploader("Upload PDF", type="pdf")
+        if st.button("Rangkum PDF", type="primary"):
+            if not api_key: st.error("API Key belum diatur!")
+            elif pdf_file:
+                with st.spinner("AI membaca dan merangkum PDF..."):
+                    try:
+                        pdf_reader = PyPDF2.PdfReader(pdf_file)
+                        text = ""
+                        for page in pdf_reader.pages:
+                            text += page.extract_text() + "\n"
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        res = model.generate_content(f"Rangkum materi ini secara terstruktur agar mudah dipelajari untuk ujian:\n\n{text[:15000]}")
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown(res.text)
+                    except:
+                        st.error("Gagal merangkum dokumen.")
+                        
+    st.markdown('</div>', unsafe_allow_html=True)
