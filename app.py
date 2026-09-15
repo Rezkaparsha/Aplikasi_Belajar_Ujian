@@ -45,7 +45,7 @@ st.markdown('''
 </style>
 ''', unsafe_allow_html=True)
 
-# Sistem Penyimpanan Data Lokal (Agar tidak hilang saat restart)
+# Sistem Penyimpanan Data Lokal
 HISTORY_FILE = "history_data.json"
 
 def load_history():
@@ -82,11 +82,13 @@ if not st.session_state.authenticated:
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# Inisialisasi State & Load History Permanen
+# Inisialisasi State
 if "history" not in st.session_state:
     st.session_state.history = load_history()
 if "flashcards" not in st.session_state:
     st.session_state.flashcards = []
+if "review_item" not in st.session_state:
+    st.session_state.review_item = None
 
 st.markdown("<h2>🎓 MYSARPRASS Learning Terminal</h2>", unsafe_allow_html=True)
 
@@ -121,74 +123,96 @@ if menu == "⚙️ Pengaturan API":
 
 # ----------------- HALAMAN DASHBOARD -----------------
 elif menu == "🏠 Dashboard Utama":
-    col1, col2 = st.columns([1, 2])
     
-    with col1:
-        st.markdown('<div class="dashboard-card" style="text-align: center; height: 100%;">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">Radar Kesiapanmu</div>', unsafe_allow_html=True)
-        st.markdown('<div class="card-subtitle">Rata-rata skor dari seluruh simulasi</div>', unsafe_allow_html=True)
+    # Jika sedang membuka mode review soal lama
+    if st.session_state.review_item is not None:
+        item = st.session_state.review_item
+        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+        if st.button("⬅️ Kembali ke Dashboard"):
+            st.session_state.review_item = None
+            st.rerun()
+            
+        st.markdown(f"### 📖 Review Arsip: {item['mapel']}")
+        st.caption(f"Dikerjakan pada: {item['date']} | Skor: {item['score']}/100")
+        st.markdown("<hr style='border-color: var(--border-color);'>", unsafe_allow_html=True)
         
-        history_data = st.session_state.history
-        if len(history_data) > 0:
-            avg_score = sum([x['score'] for x in history_data]) / len(history_data)
-            st.markdown(f'<div class="score-circle">{int(avg_score)}</div>', unsafe_allow_html=True)
-            st.progress(int(avg_score)/100)
-            st.caption("Menuju Target Aman (SNBT/UKK)")
-        else:
-            st.markdown(f'<div class="score-circle">0</div>', unsafe_allow_html=True)
-            st.caption("Belum ada data. Mulai simulasi untuk menghitung!")
+        for idx, q in enumerate(item.get('soal', [])):
+            st.markdown(f"**{idx+1}. {q.get('pertanyaan')}**")
+            st.markdown(f"💡 **Kunci Jawaban Benar:** `{q.get('jawaban_benar')}`")
+            st.markdown(f"📝 **Pembahasan:** {q.get('penjelasan')}")
+            st.markdown("<hr style='border-color: var(--border-color); border-style: dashed;'>", unsafe_allow_html=True)
+            
         st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        col1, col2 = st.columns([1, 2])
         
-    with col2:
-        st.markdown('<div class="dashboard-card" style="height: 100%;">', unsafe_allow_html=True)
-        st.markdown('<div class="card-title">Riwayat & Arsip Simulasi (Tersimpan)</div>', unsafe_allow_html=True)
+        with col1:
+            st.markdown('<div class="dashboard-card" style="text-align: center; height: 100%;">', unsafe_allow_html=True)
+            st.markdown('<div class="card-title">Radar Kesiapanmu</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card-subtitle">Rata-rata skor dari seluruh simulasi</div>', unsafe_allow_html=True)
+            
+            history_data = st.session_state.history
+            if len(history_data) > 0:
+                avg_score = sum([x['score'] for x in history_data]) / len(history_data)
+                st.markdown(f'<div class="score-circle">{int(avg_score)}</div>', unsafe_allow_html=True)
+                st.progress(int(avg_score)/100)
+                st.caption("Menuju Target Aman (SNBT/UKK)")
+            else:
+                st.markdown(f'<div class="score-circle">0</div>', unsafe_allow_html=True)
+                st.caption("Belum ada data. Mulai simulasi untuk menghitung!")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown('<div class="dashboard-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown('<div class="card-title">Riwayat & Arsip Simulasi (Klik untuk Review)</div>', unsafe_allow_html=True)
+            
+            history_data = st.session_state.history
+            if not history_data:
+                st.info("Kamu belum menyelesaikan latihan apapun.")
+            else:
+                for idx, item in enumerate(reversed(history_data)):
+                    color = "green" if item['score'] >= 70 else "red"
+                    col_h1, col_h2 = st.columns([3, 1])
+                    with col_h1:
+                        st.markdown(f"**{item['mapel']}**<br><span style='font-size: 0.8rem; color: var(--text-muted);'>{item['date']} (Skor: {item['score']}/100)</span>", unsafe_allow_html=True)
+                    with col_h2:
+                        if st.button("🔍 Pelajari", key=f"rev_{idx}"):
+                            st.session_state.review_item = item
+                            st.rerun()
+                    st.markdown("<hr style='border-color: var(--border-color); margin: 8px 0;'>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        # Flashcard
+        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-title">Flashcard Belajarmu</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-subtitle">Ketik topik materi (Contoh: "Jaringan Komputer", "Matriks") lalu AI membuatkan intisarinya.</div>', unsafe_allow_html=True)
         
-        if not history_data:
-            st.info("Kamu belum menyelesaikan latihan apapun.")
-        else:
-            for idx, item in enumerate(reversed(history_data[-5:])):
-                color = "green" if item['score'] >= 70 else "red"
-                st.markdown(f'''
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding: 10px 0;">
-                    <div>
-                        <strong>{item['mapel']}</strong><br>
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">{item['date']} (Skor: {item['score']}/100)</span>
+        fc_col1, fc_col2 = st.columns([3, 1])
+        with fc_col1:
+            topic = st.text_input("Materi / Topik", placeholder="Ketik topik...", label_visibility="collapsed")
+        with fc_col2:
+            if st.button("Buat Flashcard", type="primary", use_container_width=True) and topic and api_key:
+                with st.spinner("Meracik inti materi..."):
+                    try:
+                        model = genai.GenerativeModel('gemini-3.6-flash')
+                        prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
+                        res = model.generate_content(prompt)
+                        json_str = res.text.replace("```json", "").replace("```", "").strip()
+                        st.session_state.flashcards = json.loads(json_str)
+                    except Exception as e:
+                        st.error(f"Gagal: {e}")
+        
+        if st.session_state.flashcards:
+            cols = st.columns(len(st.session_state.flashcards))
+            for idx, card in enumerate(st.session_state.flashcards):
+                with cols[idx]:
+                    st.markdown(f'''
+                    <div class="flashcard">
+                        <div class="flashcard-title" style="color:#3b82f6; font-weight:bold;">{card.get('subtopik', 'Fakta')}</div>
+                        <div class="flashcard-content" style="margin-top:10px;">{card.get('isi', '-')}</div>
                     </div>
-                </div>
-                ''', unsafe_allow_html=True)
+                    ''', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
-        
-    # Flashcard
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.markdown('<div class="card-title">Flashcard Belajarmu</div>', unsafe_allow_html=True)
-    st.markdown('<div class="card-subtitle">Ketik topik materi (Contoh: "Jaringan Komputer", "Matriks") lalu AI membuatkan intisarinya.</div>', unsafe_allow_html=True)
-    
-    fc_col1, fc_col2 = st.columns([3, 1])
-    with fc_col1:
-        topic = st.text_input("Materi / Topik", placeholder="Ketik topik...", label_visibility="collapsed")
-    with fc_col2:
-        if st.button("Buat Flashcard", type="primary", use_container_width=True) and topic and api_key:
-            with st.spinner("Meracik inti materi..."):
-                try:
-                    model = genai.GenerativeModel('gemini-3.6-flash')
-                    prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
-                    res = model.generate_content(prompt)
-                    json_str = res.text.replace("```json", "").replace("```", "").strip()
-                    st.session_state.flashcards = json.loads(json_str)
-                except Exception as e:
-                    st.error(f"Gagal: {e}")
-    
-    if st.session_state.flashcards:
-        cols = st.columns(len(st.session_state.flashcards))
-        for idx, card in enumerate(st.session_state.flashcards):
-            with cols[idx]:
-                st.markdown(f'''
-                <div class="flashcard">
-                    <div class="flashcard-title" style="color:#3b82f6; font-weight:bold;">{card.get('subtopik', 'Fakta')}</div>
-                    <div class="flashcard-content" style="margin-top:10px;">{card.get('isi', '-')}</div>
-                </div>
-                ''', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # ----------------- HALAMAN SIMULASI -----------------
 elif menu == "📝 Mulai Simulasi":
@@ -226,18 +250,26 @@ elif menu == "📝 Mulai Simulasi":
         if not api_key: st.error("API Key belum diatur!")
         elif not materi_text: st.warning("Pilih materi atau upload PDF.")
         else:
-            with st.spinner("Mengacak bank soal..."):
+            with st.spinner("Mengacak bank soal (Mendukung Pilihan Ganda & Kompleks)..."):
                 try:
                     model = genai.GenerativeModel('gemini-3.6-flash')
                     prompt = f'''
-                    Buatkan {jumlah_soal} soal ujian berstandar HOTS berdasarkan acuan berikut.
+                    Buatkan {jumlah_soal} soal ujian berstandar HOTS berdasarkan acuan berikut. Variasikan tipenya: ada pilihan ganda biasa (1 jawaban benar) dan pilihan ganda kompleks (jawaban benar bisa lebih dari 1).
                     Acuan: {materi_text[:10000]}
                     Format JSON murni (tanpa markdown):
                     [
                         {{
                             "pertanyaan": "...",
+                            "tipe": "tunggal", 
                             "opsi": ["A. ...", "B. ...", "C. ...", "D. ...", "E. ..."],
                             "jawaban_benar": "A. ...",
+                            "penjelasan": "..."
+                        }},
+                        {{
+                            "pertanyaan": "...",
+                            "tipe": "kompleks", 
+                            "opsi": ["Opsi 1", "Opsi 2", "Opsi 3", "Opsi 4"],
+                            "jawaban_benar": ["Opsi 1", "Opsi 3"],
                             "penjelasan": "..."
                         }}
                     ]
@@ -258,25 +290,62 @@ elif menu == "📝 Mulai Simulasi":
         st.markdown(f"### 📝 Lembar Jawaban: {st.session_state.quiz_mapel}")
         
         for i, q in enumerate(st.session_state.quiz_data_v2):
-            st.markdown(f"**{i+1}. {q['pertanyaan']}**")
-            user_choice = st.radio("Opsi:", q['opsi'], key=f"qz_{i}", index=None, disabled=st.session_state.quiz_submitted)
-            st.session_state.quiz_answers[i] = user_choice
+            st.markdown(f"**{i+1}. {q.get('pertanyaan')}**")
+            
+            # Deteksi tipe soal: Tunggal (Radio) atau Kompleks (Checkbox)
+            is_complex = q.get('tipe') == 'kompleks' or isinstance(q.get('jawaban_benar'), list)
+            
+            if is_complex:
+                st.caption("ℹ️ *Soal ini bisa memiliki lebih dari 1 jawaban benar (Centang semua yang sesuai).*")
+                selected_multi = []
+                for opt in q['opsi']:
+                    chk = st.checkbox(opt, key=f"qz_comp_{i}_{opt}", disabled=st.session_state.quiz_submitted)
+                    if chk:
+                        selected_multi.append(opt)
+                st.session_state.quiz_answers[i] = selected_multi
+            else:
+                user_choice = st.radio("Opsi:", q['opsi'], key=f"qz_{i}", index=None, disabled=st.session_state.quiz_submitted)
+                st.session_state.quiz_answers[i] = user_choice
             
             if st.session_state.quiz_submitted:
-                if user_choice == q['jawaban_benar']:
+                ans_user = st.session_state.quiz_answers.get(i)
+                ans_true = q['jawaban_benar']
+                
+                if is_complex:
+                    is_ok = sorted(ans_user if isinstance(ans_user, list) else []) == sorted(ans_true if isinstance(ans_true, list) else [ans_true])
+                else:
+                    is_ok = (ans_user == ans_true)
+                    
+                if is_ok:
                     st.success("✅ Benar!")
                 else:
-                    st.error(f"❌ Salah. Kunci: {q['jawaban_benar']}")
+                    st.error(f"❌ Salah. Kunci Jawaban: {ans_true}")
                 st.caption(f"**Pembahasan:** {q['penjelasan']}")
+                
             st.markdown("<hr style='border-color: var(--border-color); border-style: dashed;'>", unsafe_allow_html=True)
             
         if not st.session_state.quiz_submitted:
             if st.button("Kumpulkan & Simpan Nilai", type="primary"):
                 st.session_state.quiz_submitted = True
-                score = sum(1 for i, q in enumerate(st.session_state.quiz_data_v2) if st.session_state.quiz_answers.get(i) == q['jawaban_benar'])
-                nilai_akhir = int((score / len(st.session_state.quiz_data_v2)) * 100)
                 
+                # Perhitungan Skor otomatis
+                score = 0
+                total_q = len(st.session_state.quiz_data_v2)
+                for i, q in enumerate(st.session_state.quiz_data_v2):
+                    ans_user = st.session_state.quiz_answers.get(i)
+                    ans_true = q['jawaban_benar']
+                    is_complex = q.get('tipe') == 'kompleks' or isinstance(ans_true, list)
+                    
+                    if is_complex:
+                        if sorted(ans_user if isinstance(ans_user, list) else []) == sorted(ans_true if isinstance(ans_true, list) else [ans_true]):
+                            score += 1
+                    else:
+                        if ans_user == ans_true:
+                            score += 1
+                            
+                nilai_akhir = int((score / total_q) * 100)
                 now = datetime.datetime.now().strftime("%d %b %Y, %H:%M")
+                
                 new_record = {
                     "mapel": st.session_state.quiz_mapel,
                     "score": nilai_akhir,
@@ -284,7 +353,7 @@ elif menu == "📝 Mulai Simulasi":
                     "soal": st.session_state.quiz_data_v2
                 }
                 st.session_state.history.append(new_record)
-                save_history(st.session_state.history) # Simpan permanen ke file
+                save_history(st.session_state.history)
                 st.rerun()
         else:
             if st.button("Selesai & Kembali ke Dashboard"):
