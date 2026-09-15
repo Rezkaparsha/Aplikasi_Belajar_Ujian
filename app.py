@@ -49,7 +49,7 @@ with tab1:
         if st.button("Buat Ringkasan Materi"):
             with st.spinner("AI sedang merangkum materi..."):
                 model = genai.GenerativeModel('gemini-2.5-flash')
-                prompt = f"Buatkan penjelasan dan ringkasan yang komprehensif, terstruktur, dan mudah dipahami dari teks materi berikut untuk persiapan ujian sekolah/SNBT:\n\n{st.session_state.pdf_text[:15000]}" # Limit teks agar tidak melebihi token
+                prompt = f"Buatkan penjelasan dan ringkasan yang komprehensif, terstruktur, dan mudah dipahami dari teks materi berikut untuk persiapan ujian sekolah/SNBT:\n\n{st.session_state.pdf_text[:15000]}"
                 response = model.generate_content(prompt)
                 st.write(response.text)
     elif not api_key:
@@ -70,7 +70,7 @@ with tab2:
     if st.session_state.pdf_text and api_key:
         if st.button("Buat Soal Ujian"):
             with st.spinner("AI sedang menyusun soal..."):
-               model = genai.GenerativeModel('gemini-2.5-flash')
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 prompt = f"""
                 Berdasarkan teks berikut, buatkan {jumlah_soal} soal ujian.
                 Variasikan tipe soal menjadi:
@@ -107,7 +107,6 @@ with tab2:
                 """
                 try:
                     response = model.generate_content(prompt)
-                    # Parsing JSON murni
                     json_str = response.text.replace("```json", "").replace("```", "").strip()
                     st.session_state.quiz_data = json.loads(json_str)
                     st.session_state.start_time = time.time()
@@ -135,7 +134,6 @@ with tab2:
             submitted = st.form_submit_button("Kumpulkan Jawaban")
             
             if submitted:
-                # Cek Waktu
                 elapsed_time = (time.time() - st.session_state.start_time) / 60
                 if elapsed_time > waktu_menit:
                     st.error("Waktu habis! Jawaban tidak tersimpan.")
@@ -148,7 +146,6 @@ with tab2:
                         correct_answers = q['jawaban_benar']
                         
                         if q['tipe'] == "lebih_dari_satu":
-                            # Memeriksa jika list jawaban user sama persis dengan kunci
                             if sorted(user_answers[i]) == sorted(correct_answers):
                                 st.success("Jawaban Anda Benar!")
                                 score += 1
@@ -157,7 +154,6 @@ with tab2:
                                 st.info(f"Jawaban Benar: {correct_answers}")
                                 st.warning(f"Penjelasan: {q['penjelasan']}")
                         else:
-                            # Memeriksa Pilihan Ganda atau Benar/Salah
                             ans = [user_answers[i]] if user_answers[i] else []
                             if ans == correct_answers:
                                 st.success(f"Jawaban Anda Benar! ({ans[0]})")
@@ -174,12 +170,10 @@ with tab3:
     st.header("Chatbot AI Khusus Ujian")
     st.write("Tanyakan hal spesifik atau materi yang masih kurang dipahami dari PDF ini.")
     
-    # Menampilkan riwayat chat
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Input pengguna
     if prompt := st.chat_input("Tanyakan sesuatu tentang materi ini..."):
         if not api_key:
             st.error("Masukkan API Key di sidebar terlebih dahulu.")
