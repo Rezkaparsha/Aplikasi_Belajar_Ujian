@@ -218,7 +218,7 @@ elif menu == "🏠 Dashboard Utama":
         if st.button("Buat Flashcard", type="primary", use_container_width=True) and topic and api_key:
             with st.spinner("Meracik inti materi..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-2.5-flash')
                     prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
                     res = model.generate_content(prompt)
                     json_str = res.text.replace("```json", "").replace("```", "").strip()
@@ -287,7 +287,7 @@ elif menu == "📝 Mulai Simulasi":
         else:
             with st.spinner("Mengacak bank soal..."):
                 try:
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-2.5-flash')
                     prompt = f'''
                     Berdasarkan acuan berikut, buatkan {jumlah_soal} soal ujian berstandar HOTS (Higher Order Thinking Skills).
                     Acuan/Materi: {materi_text[:10000]}
@@ -391,7 +391,7 @@ elif menu == "📚 Generator Materi":
             elif yt_url:
                 with st.spinner("AI menganalisis video..."):
                     try:
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        model = genai.GenerativeModel('gemini-2.5-flash')
                         res = model.generate_content(f"Buatkan ringkasan struktur, materi penting, dan rumus/konsep dari video ini: {yt_url}")
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.markdown(res.text)
@@ -408,7 +408,7 @@ elif menu == "📚 Generator Materi":
                         text = ""
                         for page in pdf_reader.pages:
                             text += page.extract_text() + "\n"
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        model = genai.GenerativeModel('gemini-2.5-flash')
                         res = model.generate_content(f"Rangkum materi ini secara terstruktur agar mudah dipelajari untuk ujian:\n\n{text[:15000]}")
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.markdown(res.text)
