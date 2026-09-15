@@ -48,7 +48,7 @@ with tab1:
     if st.session_state.pdf_text and api_key:
         if st.button("Buat Ringkasan Materi"):
             with st.spinner("AI sedang merangkum materi..."):
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 prompt = f"Buatkan penjelasan dan ringkasan yang komprehensif, terstruktur, dan mudah dipahami dari teks materi berikut untuk persiapan ujian sekolah/SNBT:\n\n{st.session_state.pdf_text[:15000]}" # Limit teks agar tidak melebihi token
                 response = model.generate_content(prompt)
                 st.write(response.text)
@@ -70,7 +70,7 @@ with tab2:
     if st.session_state.pdf_text and api_key:
         if st.button("Buat Soal Ujian"):
             with st.spinner("AI sedang menyusun soal..."):
-                model = genai.GenerativeModel('gemini-1.5-flash')
+               model = genai.GenerativeModel('gemini-2.5-flash')
                 prompt = f"""
                 Berdasarkan teks berikut, buatkan {jumlah_soal} soal ujian.
                 Variasikan tipe soal menjadi:
@@ -189,7 +189,7 @@ with tab3:
             st.session_state.chat_history.append({"role": "user", "content": prompt})
 
             with st.chat_message("assistant"):
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 context = f"Konteks materi PDF: {st.session_state.pdf_text[:10000]}\n\n" if st.session_state.pdf_text else ""
                 full_prompt = context + prompt
                 
