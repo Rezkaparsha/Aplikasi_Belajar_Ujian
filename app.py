@@ -194,7 +194,8 @@ elif menu == "🏠 Dashboard Utama":
             if st.button("Buat Flashcard", type="primary", use_container_width=True) and topic and api_key:
                 with st.spinner("Meracik inti materi..."):
                     try:
-                        model = genai.GenerativeModel('gemini-3.6-flash')
+                        # Ganti ke gemini-2.0-flash yang limitnya besar dan stabil
+                        model = genai.GenerativeModel('gemini-2.0-flash')
                         prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
                         res = model.generate_content(prompt)
                         json_str = res.text.replace("```json", "").replace("```", "").strip()
@@ -251,9 +252,10 @@ elif menu == "📝 Mulai Simulasi":
         if not api_key: st.error("API Key belum diatur!")
         elif not materi_text: st.warning("Pilih materi atau upload PDF.")
         else:
-            with st.spinner("Mengacak bank soal..."):
+            with st.spinner("Mengacak bank soal (Mendukung Pilihan Ganda & Kompleks)..."):
                 try:
-                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    # Ganti ke gemini-2.0-flash yang limitnya besar dan stabil
+                    model = genai.GenerativeModel('gemini-2.0-flash')
                     prompt = f'''
                     Buatkan {jumlah_soal} soal ujian berstandar HOTS berdasarkan acuan berikut. Variasikan tipenya: ada pilihan ganda biasa (1 jawaban benar) dan pilihan ganda kompleks (jawaban benar bisa lebih dari 1).
                     Acuan: {materi_text[:10000]}
@@ -375,7 +377,8 @@ elif menu == "📚 Generator Materi":
         if st.button("Proses Video", type="primary") and yt_url and api_key:
             with st.spinner("Menganalisis video..."):
                 try:
-                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    # Ganti ke gemini-2.0-flash yang limitnya besar dan stabil
+                    model = genai.GenerativeModel('gemini-2.0-flash')
                     res = model.generate_content(f"Buatkan ringkasan materi penting dan rumus dari video ini: {yt_url}")
                     st.markdown(res.text)
                 except Exception as e:
@@ -387,7 +390,8 @@ elif menu == "📚 Generator Materi":
                 try:
                     pdf_reader = PyPDF2.PdfReader(pdf_file)
                     text = "".join([page.extract_text() for page in pdf_reader.pages])
-                    model = genai.GenerativeModel('gemini-3.6-flash')
+                    # Ganti ke gemini-2.0-flash yang limitnya besar dan stabil
+                    model = genai.GenerativeModel('gemini-2.0-flash')
                     res = model.generate_content(f"Rangkum materi ini secara terstruktur:\n\n{text[:15000]}")
                     st.markdown(res.text)
                 except Exception as e:
