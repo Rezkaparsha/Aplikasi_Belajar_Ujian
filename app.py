@@ -198,7 +198,8 @@ elif menu == "🏠 Dashboard Utama":
                         prompt = f"Buatkan 3 kartu hafalan (flashcard) singkat tentang '{topic}'. Format JSON murni: [{{'subtopik': '...', 'isi': '...'}}]"
                         res = model.generate_content(prompt)
                         json_str = res.text.replace("```json", "").replace("```", "").strip()
-                        st.session_state.flashcards = json.loads(json_str)
+                        # Tambahan strict=False untuk mencegah error karakter spesial
+                        st.session_state.flashcards = json.loads(json_str, strict=False)
                     except Exception as e:
                         st.error(f"Gagal: {e}")
         
@@ -250,13 +251,14 @@ elif menu == "📝 Mulai Simulasi":
         if not api_key: st.error("API Key belum diatur!")
         elif not materi_text: st.warning("Pilih materi atau upload PDF.")
         else:
-            with st.spinner("Mengacak bank soal (Mendukung Pilihan Ganda & Kompleks)..."):
+            with st.spinner("Mengacak bank soal..."):
                 try:
                     model = genai.GenerativeModel('gemini-3.6-flash')
                     prompt = f'''
                     Buatkan {jumlah_soal} soal ujian berstandar HOTS berdasarkan acuan berikut. Variasikan tipenya: ada pilihan ganda biasa (1 jawaban benar) dan pilihan ganda kompleks (jawaban benar bisa lebih dari 1).
                     Acuan: {materi_text[:10000]}
-                    Format JSON murni (tanpa markdown):
+                    
+                    PENTING: Pastikan mengembalikan HANYA format JSON murni. Jika ada potongan kode pemrograman, escape karakter khusus dengan benar.
                     [
                         {{
                             "pertanyaan": "...",
@@ -276,7 +278,9 @@ elif menu == "📝 Mulai Simulasi":
                     '''
                     res = model.generate_content(prompt)
                     json_str = res.text.replace("```json", "").replace("```", "").strip()
-                    st.session_state.quiz_data_v2 = json.loads(json_str)
+                    
+                    # Tambahan strict=False untuk mencegah error control character dari kode Python
+                    st.session_state.quiz_data_v2 = json.loads(json_str, strict=False)
                     st.session_state.quiz_mapel = mapel_name
                     st.session_state.quiz_submitted = False
                     st.session_state.quiz_answers = {}
@@ -292,7 +296,6 @@ elif menu == "📝 Mulai Simulasi":
         for i, q in enumerate(st.session_state.quiz_data_v2):
             st.markdown(f"**{i+1}. {q.get('pertanyaan')}**")
             
-            # Deteksi tipe soal: Tunggal (Radio) atau Kompleks (Checkbox)
             is_complex = q.get('tipe') == 'kompleks' or isinstance(q.get('jawaban_benar'), list)
             
             if is_complex:
@@ -328,7 +331,6 @@ elif menu == "📝 Mulai Simulasi":
             if st.button("Kumpulkan & Simpan Nilai", type="primary"):
                 st.session_state.quiz_submitted = True
                 
-                # Perhitungan Skor otomatis
                 score = 0
                 total_q = len(st.session_state.quiz_data_v2)
                 for i, q in enumerate(st.session_state.quiz_data_v2):
